@@ -8,7 +8,7 @@ from hiv import HIVTreatment as model
 
 import pickle
 # import matplotlib.pyplot as plt
-# from tqdm import tqdm
+from tqdm import tqdm
 from scipy.stats import sem
 from scipy import stats
 
