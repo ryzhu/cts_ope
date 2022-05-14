@@ -191,5 +191,5 @@ loglin_pol_1 = lambda obs, prev_action: log_linear_policy(
 
 data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5)
 
-with open('data.pickle', 'wb') as f:
+with open('results/data.pickle', 'wb') as f:
     pickle.dump(data_loglin_pol_1_dt_5, f)
