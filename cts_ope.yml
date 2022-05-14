@@ -1,4 +1,4 @@
-name: when2treat
+name: cts_ope
 channels:
   - conda-forge
   - defaults
