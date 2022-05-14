@@ -55,9 +55,9 @@ def constant_hazard_threshold_policy(obs, prev_action, beta, c, B, dt):
 def log_linear_policy(obs, prev_action, beta, c, B, dt):
     """ Prev_action is binary 0-1. Returns P(taking action 1) = exp(beta@obs + c) dt. 
         Setup is in prep for logistic regression down the line. """
-    switch_probs_01 = minimum(B * dt / (1 + exp((10**obs) @ beta - c)), 1) # P(1 | 0)
-    stay_probs_11 = 1 - minimum(B * dt / (1 + exp(- ((10**obs) @ beta - c))), 1) # P(1 | 1)
-    return where(prev_action == 0, switch_probs_01, stay_probs_11)
+    switch_probs_01 = np.minimum(B * dt / (1 + np.exp((10**obs) @ beta - c)), 1) # P(1 | 0)
+    stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- ((10**obs) @ beta - c))), 1) # P(1 | 1)
+    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
     
 def get_data_parallel(policy, dt=5, total_days=1000, num_patients=30):
 #     track = True
