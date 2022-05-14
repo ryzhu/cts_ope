@@ -4,6 +4,8 @@ import numpy as np
 # with dview.sync_imports():
 #     from numpy import exp, where, mean, minimum
 from hiv import HIVTreatment as model
+import multiprocessing as mp
+print("Number of processors: ", mp.cpu_count())
 
 
 import pickle
