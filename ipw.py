@@ -6,6 +6,7 @@ import numpy as np
 from hiv import HIVTreatment as model
 import multiprocessing as mp
 print("Number of processors: ", mp.cpu_count())
+pool = mp.Pool(mp.cpu_count())
 
 
 import pickle
@@ -21,7 +22,6 @@ from scipy import stats
 perturb_rate = 0.0
 num_actions = 4
 num_states = 6
-num_patients = 30
 env_params = {'p_k2': -0.03921113587893166,
  'p_k1': 0.20856792856393241,
  'p_f': 0.18057095024380307,
@@ -34,8 +34,6 @@ env_params = {'p_k2': -0.03921113587893166,
  'p_m2': -0.024093381660099132,
  'p_d_E': -0.03485294142562121,
  'p_lambdaE': -0.11146573677164344}
-B = 0.1
-
 
 ## Rollout a Trajectory ##
 def encode_action(action):
@@ -184,12 +182,25 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                    "policy_probs": policy_probs})
     return data
 
-
+dt=5
+B=0.1
+total_days=1000
 beta_1, c1 = np.array([0, 0, 0, 0, 0.00002, -0.2]), -3
 loglin_pol_1 = lambda obs, prev_action: log_linear_policy(
-    obs, prev_action, beta_1, c1, B=0.1, dt=5)
+    obs, prev_action, beta_1, c1, B, dt)
 
-data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5)
+results = []
+def collect_result(result):
+    global results
+    results.append(result)
 
-with open('results/data.pickle', 'wb') as f:
-    pickle.dump(data_loglin_pol_1_dt_5, f)
+for traj in tqdm(pool.istarmap_unordered(get_data, [[loglin_pol_1, dt, total_days, 1] for _ in range(int(1e4))])):
+    results.append(traj)
+# for i, row in enumerate(data):
+#     pool.apply_async(get_data, args=(i, row, 4, 8), callback=collect_result)
+
+
+# data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5, )
+
+with open('results/loglin_dt_5_B_01.pickle', 'wb') as f:
+    pickle.dump(results, f)
