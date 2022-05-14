@@ -100,7 +100,8 @@ class HIVTreatment(object):
     def observe(self):
         """Return observation = current state + noise."""
         if self.logspace:
-            return np.log10(self.state + np.random.normal(scale=self.noise_stds))
+            # return np.log10(self.state + np.random.normal(scale=self.noise_stds))
+            return np.log10(self.state)
         else:
             return self.state
 
