@@ -186,8 +186,11 @@ dt=5
 B=0.1
 total_days=1000
 beta_1, c1 = np.array([0, 0, 0, 0, 0.00002, -0.2]), -3
-loglin_pol_1 = lambda obs, prev_action: log_linear_policy(
+def loglin_pol_1(obs, prev_action):
+    return log_linear_policy(
     obs, prev_action, beta_1, c1, B, dt)
+# loglin_pol_1 = lambda obs, prev_action: log_linear_policy(
+#     obs, prev_action, beta_1, c1, B, dt)
 
 results = []
 def collect_result(result):
