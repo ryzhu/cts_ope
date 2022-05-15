@@ -79,6 +79,7 @@ class HIVTreatment(object):
         self.perturb_rate = perturb_rate
         self.reset(perturb_params, p_T1, p_T2, p_T1s, p_T2s, p_V, p_E, **kw)
         self.T = T
+        np.random.random.seed()
 
 
     def reset(self, perturb_params=False, p_T1=0, p_T2=0, p_T1s=0, p_T2s=0, p_V=0, p_E=0, **kw):

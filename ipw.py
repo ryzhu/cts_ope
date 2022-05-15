@@ -142,6 +142,7 @@ def get_data_parallel(policy, dt=5, total_days=1000, num_patients=30):
     return data
 
 def get_data(policy, dt=5, total_days=1000, num_patients=30):
+    np.random.random.seed()
     data = []
     for _ in range(num_patients): # parallelize this
             episode_length = total_days/dt
