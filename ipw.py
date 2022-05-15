@@ -39,26 +39,6 @@ def encode_action(action):
     a = np.zeros(num_actions)
     a[action] = 1
     return a
-
-def random_policy(state):
-    return np.random.randint(0, num_actions)
-
-def constant_hazard_threshold_policy(obs, prev_action, beta, c, B, dt):
-    """ Prev_action is binary 0-1. Returns probability of taking action 1. """
-    if prev_action==0 and (10**obs)@beta >= c:
-        return B*dt
-    elif prev_action != 0 and (10**obs)@beta < c:
-        return 1 - B*dt
-    return int(prev_action != 0)
-
-def log_linear_policy(obs, prev_action, beta, c, B, dt, raw_state=False):
-    """ Prev_action is binary 0-1. Returns P(taking action 1) = exp(beta@obs + c) dt. 
-        Setup is in prep for logistic regression down the line. """
-    if raw_state:
-        obs = 10**obs
-    switch_probs_01 = np.minimum(B * dt / (1 + np.exp(obs @ beta - c)), 1) # P(1 | 0)
-    stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- (obs @ beta - c))), 1) # P(1 | 1)
-    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
     
 def get_data_parallel(policy, dt=5, total_days=1000, num_patients=30):
 #     track = True
@@ -185,6 +165,27 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                    "policy_probs": policy_probs})
     return data
 
+### Define observational policies, which have a logistic structure. ###
+def random_policy(state):
+    return np.random.randint(0, num_actions)
+
+# def constant_hazard_threshold_policy(obs, prev_action, beta, c, B, dt):
+#     """ Prev_action is binary 0-1. Returns probability of taking action 1. """
+#     if prev_action==0 and (10**obs)@beta >= c:
+#         return B*dt
+#     elif prev_action != 0 and (10**obs)@beta < c:
+#         return 1 - B*dt
+#     return int(prev_action != 0)
+
+def log_linear_policy(obs, prev_action, beta, c, B, dt, raw_state=False):
+    """ Prev_action is binary 0-1. Returns P(taking action 1) = exp(beta@obs + c) dt. 
+        Setup is in prep for logistic regression down the line. """
+    if raw_state:
+        obs = 10**obs
+    switch_probs_01 = np.minimum(B * dt / (1 + np.exp(obs @ beta - c)), 1) # P(1 | 0)
+    stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- (obs @ beta - c))), 1) # P(1 | 1)
+    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
+
 dt=5
 B=0.1
 total_days=1000
@@ -205,8 +206,18 @@ def collect_result(result):
     global results
     results.append(result)
 
-def get_data_loglin(policy):
-    return get_data(policy, dt, total_days, 1)
+def get_data_dt_5(policy):
+    return get_data(policy, 5, total_days, 1)
+
+### Define evaluation threshold policies. ###
+def constant_threshold_policy(obs, prev_action, beta, c, B, dt, raw_state=False):
+    """ Prev_action is binary 0-1. Returns probability of taking action 1. """
+    if raw_state:
+        obs = 10**obs
+
+    switch_probs_01 = B * dt * (obs @ beta - c <= 0) # P(1 | 0)
+    stay_probs_11 = 1 - B * dt * (obs @ beta - c >= 0) # P(1 | 1)
+    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
@@ -220,4 +231,25 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 # data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5, )
 
     with open('results/loglin2_dt_5_B_01.pickle', 'wb') as f:
+        pickle.dump(results, f)
+    ## Get monte carlo policy rollouts
+    num_monte_carlo_rollouts = int(1e3)
+    outcomes = {}
+    for V_weight in [-1, -2, -3]:
+        for E_weight in [1, 2, 3]:
+            for c in [-1, 0, 1]:
+                param_string = "{}, {}, {}".format(V_weight, E_weight, c)
+                print(param_string)
+                def threshold_eval_pol(obs, prev_action):
+                    return constant_threshold_policy(
+                    obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+                def get_monte_carlo_eval_data_dt_5(null_arg):
+                    return get_data(threshold_eval_pol, 5, total_days, 1)
+                
+                trajs = []
+                with mp.Pool(mp.cpu_count()) as pool:
+                    for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data_dt_5, [0 for _ in range(num_monte_carlo_rollouts)])):
+                        trajs.extend(traj)
+                outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
+    with open('results/monte_carlo_thresh_eval_dt_5_B_01.pickle', 'wb') as f:
         pickle.dump(results, f)
