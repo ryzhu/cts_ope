@@ -194,7 +194,10 @@ def collect_result(result):
     global results
     results.append(result)
 
-for traj in tqdm(pool.istarmap_unordered(get_data, [[loglin_pol_1, dt, total_days, 1] for _ in range(int(1e4))])):
+def get_data_loglin(policy):
+    return get_data(policy, dt, total_days, 1)
+
+for traj in tqdm(pool.imap_unordered(get_data_loglin, [loglin_pol_1 for _ in range(int(1e4))])):
     results.append(traj)
 # for i, row in enumerate(data):
 #     pool.apply_async(get_data, args=(i, row, 4, 8), callback=collect_result)
