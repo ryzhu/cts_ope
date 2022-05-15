@@ -6,7 +6,6 @@ import numpy as np
 from hiv import HIVTreatment as model
 import multiprocessing as mp
 print("Number of processors: ", mp.cpu_count())
-pool = mp.Pool(mp.cpu_count())
 
 
 import pickle
@@ -197,16 +196,19 @@ def collect_result(result):
     global results
     results.append(result)
 
-def get_data_loglin(num_trials):
-    return get_data(loglin_pol_1, dt, total_days, num_trials)
+def get_data_loglin(policy):
+    return get_data(policy, dt, total_days, 1)
 
-for traj in tqdm(pool.imap_unordered(get_data_loglin, [1 for _ in range(int(1e4))])):
-    results.extend(traj)
+if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
+    # and 'forkserver' start_methods
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        for traj in tqdm(pool.imap_unordered(get_data_loglin, [loglin_pol_1 for _ in range(int(1e4))])):
+            results.extend(traj)
 # for i, row in enumerate(data):
 #     pool.apply_async(get_data, args=(i, row, 4, 8), callback=collect_result)
 
 
 # data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5, )
 
-with open('results/loglin_dt_5_B_01.pickle', 'wb') as f:
-    pickle.dump(results, f)
+    with open('results/loglin_dt_5_B_01.pickle', 'wb') as f:
+        pickle.dump(results, f)
