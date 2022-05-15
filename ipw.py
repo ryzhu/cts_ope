@@ -51,11 +51,13 @@ def constant_hazard_threshold_policy(obs, prev_action, beta, c, B, dt):
         return 1 - B*dt
     return int(prev_action != 0)
 
-def log_linear_policy(obs, prev_action, beta, c, B, dt):
+def log_linear_policy(obs, prev_action, beta, c, B, dt, raw_state=False):
     """ Prev_action is binary 0-1. Returns P(taking action 1) = exp(beta@obs + c) dt. 
         Setup is in prep for logistic regression down the line. """
-    switch_probs_01 = np.minimum(B * dt / (1 + np.exp((10**obs) @ beta - c)), 1) # P(1 | 0)
-    stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- ((10**obs) @ beta - c))), 1) # P(1 | 1)
+    if raw_state:
+        obs = 10**obs
+    switch_probs_01 = np.minimum(B * dt / (1 + np.exp(obs @ beta - c)), 1) # P(1 | 0)
+    stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- (obs @ beta - c))), 1) # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
     
 def get_data_parallel(policy, dt=5, total_days=1000, num_patients=30):
@@ -176,7 +178,8 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                     policy_probs.append(1 - prob_take_action_1)
                 else:
                     policy_probs.append(prob_take_action_1)
-            ep_reward = np.median(rewards)
+            # ep_reward = np.median(rewards)
+            ep_reward = np.mean(rewards)
             data.append({"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward,
                    "policy_probs": policy_probs})
     return data
@@ -187,9 +190,14 @@ total_days=1000
 beta_1, c1 = np.array([0, 0, 0, 0, 0.00002, -0.2]), -3
 def loglin_pol_1(obs, prev_action):
     return log_linear_policy(
-    obs, prev_action, beta_1, c1, B, dt)
+    obs, prev_action, beta_1, c1, B, dt, raw_state=True)
 # loglin_pol_1 = lambda obs, prev_action: log_linear_policy(
 #     obs, prev_action, beta_1, c1, B, dt)
+
+beta_2, c2 = np.array([0, 0, 0, 0, -2, 2]), 0
+def loglin_pol_2(obs, prev_action):
+    return log_linear_policy(
+    obs, prev_action, beta_2, c2, B, dt, raw_state=False)
 
 results = []
 def collect_result(result):
@@ -202,7 +210,7 @@ def get_data_loglin(policy):
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
     with mp.Pool(mp.cpu_count()) as pool:
-        for traj in tqdm(pool.imap_unordered(get_data_loglin, [loglin_pol_1 for _ in range(int(1e4))])):
+        for traj in tqdm(pool.imap_unordered(get_data_loglin, [loglin_pol_2 for _ in range(int(1e4))])):
             results.extend(traj)
 # for i, row in enumerate(data):
 #     pool.apply_async(get_data, args=(i, row, 4, 8), callback=collect_result)
@@ -210,5 +218,5 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 # data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5, )
 
-    with open('results/loglin_dt_5_B_01.pickle', 'wb') as f:
+    with open('results/loglin2_dt_5_B_01.pickle', 'wb') as f:
         pickle.dump(results, f)
