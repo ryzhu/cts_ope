@@ -201,7 +201,7 @@ def get_data_loglin(policy):
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
-    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+    with mp.Pool(mp.cpu_count()) as pool:
         for traj in tqdm(pool.imap_unordered(get_data_loglin, [loglin_pol_1 for _ in range(int(1e4))])):
             results.extend(traj)
 # for i, row in enumerate(data):
