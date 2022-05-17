@@ -272,28 +272,28 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     param_string = "Vw: {}, Ew: {}, c: {}".format(V_weight, E_weight, c)
     print(param_string)
 
-    # B = 0.3
-    # policy_type = "log"
-    # for dt in [0.1]: #, 0.3, 1, 3]:
-    #     def threshold_eval_pol(obs, prev_action):
-    #         return constant_threshold_policy(
-    #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-    #     def log_obs_pol_eval(obs, prev_action):
-    #         return log_linear_policy(
-    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-    #     def get_monte_carlo_eval_data(null_arg):
-    #         if policy_type == "thresh":
-    #             return get_data(threshold_eval_pol, dt, total_days, 1)
-    #         elif policy_type == "log":
-    #             return get_data(log_obs_pol_eval, dt, total_days, 1)
+    B = 0.3
+    policy_type = "log"
+    for dt in [0.1, 0.3, 1, 3]:
+        def threshold_eval_pol(obs, prev_action):
+            return constant_threshold_policy(
+            obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def log_obs_pol_eval(obs, prev_action):
+            return log_linear_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def get_monte_carlo_eval_data(null_arg):
+            if policy_type == "thresh":
+                return get_data(threshold_eval_pol, dt, total_days, 1)
+            elif policy_type == "log":
+                return get_data(log_obs_pol_eval, dt, total_days, 1)
         
-    #     trajs = []
-    #     with mp.Pool(mp.cpu_count()) as pool:
-    #         for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
-    #             trajs.extend(traj)
-    #     outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
-    #     with open('results/monte_carlo_{}_eval_dt_{}_B_{}.pickle'.format(policy_type, dt, B), 'wb') as f:
-    #         pickle.dump(outcomes, f)
+        trajs = []
+        with mp.Pool(mp.cpu_count()) as pool:
+            for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
+                trajs.extend(traj)
+        outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
+        with open('results/monte_carlo_{}_eval_dt_{}_B_{}.pickle'.format(policy_type, dt, B), 'wb') as f:
+            pickle.dump(outcomes, f)
     
     # dt = 0.1
     # for B in [0.99, 1, 1.01]:
@@ -343,25 +343,25 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_obs_trajs = int(3e3)
-    B_obs, B_eval = 0.2, 0.3
-    for dt in [0.1, 0.3, 1, 3]:
-        def log_obs_pol(obs, prev_action):
-            return log_linear_policy(
-                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
-        def get_obs_data(null_arg):
-            return get_data(log_obs_pol, dt, total_days, 1)
-        results = []
-        with mp.Pool(mp.cpu_count()) as pool:
-            for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
-                results.extend(traj)
+    # num_obs_trajs = int(3e3)
+    # B_obs, B_eval = 0.2, 0.3
+    # for dt in [0.1, 0.3, 1, 3]:
+    #     def log_obs_pol(obs, prev_action):
+    #         return log_linear_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
+    #     def get_obs_data(null_arg):
+    #         return get_data(log_obs_pol, dt, total_days, 1)
+    #     results = []
+    #     with mp.Pool(mp.cpu_count()) as pool:
+    #         for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+    #             results.extend(traj)
         
-        def log_eval_pol(obs, prev_action):
-            return log_linear_policy(
-                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
-        IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, log_eval_pol)
-        IPW_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
-            V_weight, E_weight, c, B_eval): {"IPW ests": IPW_ests, "IPW_weights": IPW_weights}}
+    #     def log_eval_pol(obs, prev_action):
+    #         return log_linear_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+    #     IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, log_eval_pol)
+    #     IPW_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
+    #         V_weight, E_weight, c, B_eval): {"IPW ests": IPW_ests, "IPW_weights": IPW_weights}}
 
-        with open('results/ipw_dt_{}_Bobs_{}_n_{}.pickle'.format(dt, B_obs, num_obs_trajs), 'wb') as f:
-            pickle.dump(IPW_data, f)
+    #     with open('results/ipw_dt_{}_Bobs_{}_n_{}.pickle'.format(dt, B_obs, num_obs_trajs), 'wb') as f:
+    #         pickle.dump(IPW_data, f)
