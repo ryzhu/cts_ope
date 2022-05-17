@@ -221,17 +221,17 @@ def constant_threshold_policy(obs, prev_action, beta, c, B, dt, raw_state=False)
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
-    with mp.Pool(mp.cpu_count()) as pool:
-        for traj in tqdm(pool.imap_unordered(get_data_dt_5, [loglin_pol_2 for _ in range(int(1e4))])):
-            results.extend(traj)
+    # with mp.Pool(mp.cpu_count()) as pool:
+    #     for traj in tqdm(pool.imap_unordered(get_data_dt_5, [loglin_pol_2 for _ in range(int(1e4))])):
+    #         results.extend(traj)
 # for i, row in enumerate(data):
 #     pool.apply_async(get_data, args=(i, row, 4, 8), callback=collect_result)
 
 
 # data_loglin_pol_1_dt_5 = get_data(loglin_pol_1, dt=5, )
 
-    with open('results/loglin2_dt_5_B_01.pickle', 'wb') as f:
-        pickle.dump(results, f)
+    # with open('results/loglin2_dt_5_B_01.pickle', 'wb') as f:
+    #     pickle.dump(results, f)
     ## Get monte carlo policy rollouts
     num_monte_carlo_rollouts = int(1e3)
     outcomes = {}
@@ -244,6 +244,22 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     B = 0.1
     for dt in [0.1, 1, 10]:
+        def threshold_eval_pol(obs, prev_action):
+            return constant_threshold_policy(
+            obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def get_monte_carlo_eval_data(null_arg):
+            return get_data(threshold_eval_pol, dt, total_days, 1)
+        
+        trajs = []
+        with mp.Pool(mp.cpu_count()) as pool:
+            for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
+                trajs.extend(traj)
+        outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
+        with open('results/monte_carlo_thresh_eval_dt_{}_B_{}.pickle'.format(dt, B), 'wb') as f:
+            pickle.dump(outcomes, f)
+    
+    dt = 0.1
+    for B in [0.1, 1, 10]:
         def threshold_eval_pol(obs, prev_action):
             return constant_threshold_policy(
             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
