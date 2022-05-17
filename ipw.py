@@ -312,20 +312,20 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     #         pickle.dump(outcomes, f)
 
     ##### Get obs data. #####
-    num_obs_trajs = int(1e3)
-    B = 0.2
-    for dt in [0.3, 1, 3]:
-        def log_obs_pol(obs, prev_action):
-            return log_linear_policy(
-                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-        def get_obs_data(null_arg):
-            return get_data(log_obs_pol, dt, total_days, 1)
-        results = []
-        with mp.Pool(mp.cpu_count()) as pool:
-            for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
-                results.extend(traj)
-        with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
-            pickle.dump(results, f)
+    # num_obs_trajs = int(1e3)
+    # B = 0.2
+    # for dt in [0.3, 1, 3]:
+    #     def log_obs_pol(obs, prev_action):
+    #         return log_linear_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+    #     def get_obs_data(null_arg):
+    #         return get_data(log_obs_pol, dt, total_days, 1)
+    #     results = []
+    #     with mp.Pool(mp.cpu_count()) as pool:
+    #         for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+    #             results.extend(traj)
+    #     with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
+    #         pickle.dump(results, f)
 
     # dt = 0.1
     # for B in [0.99, 1, 1.01]:
