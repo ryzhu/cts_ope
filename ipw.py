@@ -274,7 +274,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     B = 0.3
     policy_type = "log"
-    for dt in [0.3, 1, 3]:
+    for dt in [0.1]: #, 0.3, 1, 3]:
         def threshold_eval_pol(obs, prev_action):
             return constant_threshold_policy(
             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
