@@ -248,15 +248,15 @@ def policy_prob_traj(policy, obs, actions):
 
 def IPW_eval(obs_data, pi_obs, pi_eval):
     IPW_weighted_vals = []
+    ip_weights = []
     for traj in obs_data:
         # Use log trick to avoid overflow
         log_prob_traj_o = np.sum(np.log(policy_prob_traj(pi_obs, traj["states"], traj["actions"])))
         log_prob_traj_e = np.sum(np.log(policy_prob_traj(pi_eval, traj["states"], traj["actions"])))
-        print(log_prob_traj_e, log_prob_traj_o)
         ipw = np.exp(log_prob_traj_e - log_prob_traj_o)
-        print(ipw)
         IPW_weighted_vals.append(ipw * traj["outcome"])
-    return IPW_weighted_vals
+        ip_weights.append(ipw)
+    return IPW_weighted_vals, ip_weights
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
@@ -340,3 +340,28 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     #             results.extend(traj)
     #     with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
     #         pickle.dump(results, f)
+
+
+    ##### Get IPW ests. #####
+    num_obs_trajs = int(1e4)
+    B_obs, B_eval = 0.2, 0.3
+    for dt in [0.1, 0.3, 1, 3]:
+        def log_obs_pol(obs, prev_action):
+            return log_linear_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
+        def get_obs_data(null_arg):
+            return get_data(log_obs_pol, dt, total_days, 1)
+        results = []
+        with mp.Pool(mp.cpu_count()) as pool:
+            for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+                results.extend(traj)
+        
+        def log_eval_pol(obs, prev_action):
+            return log_linear_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+        IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, log_eval_pol)
+        IPW_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
+            V_weight, E_weight, c, B_eval): {"IPW ests": IPW_ests, "IPW_weights": IPW_weights}}
+
+        with open('results/ipw_dt_{}_Bobs_{}_n_{}.pickle'.format(dt, B_obs, num_obs_trajs), 'wb') as f:
+            pickle.dump({}, f)
