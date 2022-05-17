@@ -265,7 +265,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             pickle.dump(outcomes, f)
 
     ##### Get obs data. #####
-    num_obs_trajs = int(1e4)
+    num_obs_trajs = int(1e2)
     B = 0.1
     for dt in [0.1, 1, 10]:
         def log_obs_pol(obs, prev_action):
