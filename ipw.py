@@ -343,7 +343,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_obs_trajs = int(1e4)
+    num_obs_trajs = int(3e3)
     B_obs, B_eval = 0.2, 0.3
     for dt in [0.1, 0.3, 1, 3]:
         def log_obs_pol(obs, prev_action):
