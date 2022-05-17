@@ -237,6 +237,27 @@ def constant_threshold_policy(obs, prev_action, beta, c, B, dt, raw_state=False)
     stay_probs_11 = 1 - B * dt * (obs @ beta - c >= 0) # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
+##### Define IPW ests #####
+def policy_prob_traj(policy, obs, actions):
+    """ Returns the probability of taking the trajectory under the policy. 
+        Obs - horizon x state dim 2D array, Actions - 1D array of length horizon """
+    prev_actions = np.concatenate([[0], actions[:-1]])
+    pi_1 = policy(obs, prev_actions) # P(A_t = 1 | X_t, A_t-1)
+    pi_0 = 1 - pi_1 # P(A_t = 0 | X_t, A_t-1)
+    return np.where(actions == 0, pi_0, pi_1)
+
+def IPW_eval(obs_data, pi_obs, pi_eval):
+    IPW_weighted_vals = []
+    for traj in obs_data:
+        # Use log trick to avoid overflow
+        log_prob_traj_o = np.sum(np.log(policy_prob_traj(pi_obs, traj["states"], traj["actions"])))
+        log_prob_traj_e = np.sum(np.log(policy_prob_traj(pi_eval, traj["states"], traj["actions"])))
+        print(log_prob_traj_e, log_prob_traj_o)
+        ipw = np.exp(log_prob_traj_e - log_prob_traj_o)
+        print(ipw)
+        IPW_weighted_vals.append(ipw * traj["outcome"])
+    return IPW_weighted_vals
+
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
     total_days = 1000
@@ -251,8 +272,31 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     param_string = "Vw: {}, Ew: {}, c: {}".format(V_weight, E_weight, c)
     print(param_string)
 
-    # B = 0.1
-    # for dt in [0.3, 1, 3]:
+    B = 0.3
+    policy_type = "log"
+    for dt in [0.3, 1, 3]:
+        def threshold_eval_pol(obs, prev_action):
+            return constant_threshold_policy(
+            obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def log_obs_pol_eval(obs, prev_action):
+            return log_linear_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def get_monte_carlo_eval_data(null_arg):
+            if policy_type == "thresh":
+                return get_data(threshold_eval_pol, dt, total_days, 1)
+            elif policy_type == "log":
+                return get_data(log_obs_pol_eval, dt, total_days, 1)
+        
+        trajs = []
+        with mp.Pool(mp.cpu_count()) as pool:
+            for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
+                trajs.extend(traj)
+        outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
+        with open('results/monte_carlo_{}_eval_dt_{}_B_{}.pickle'.format(policy_type, dt, B), 'wb') as f:
+            pickle.dump(outcomes, f)
+    
+    # dt = 0.1
+    # for B in [0.99, 1, 1.01]:
     #     def threshold_eval_pol(obs, prev_action):
     #         return constant_threshold_policy(
     #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
@@ -266,41 +310,11 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     #     outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
     #     with open('results/monte_carlo_thresh_eval_dt_{}_B_{}.pickle'.format(dt, B), 'wb') as f:
     #         pickle.dump(outcomes, f)
-    
-    dt = 0.1
-    for B in [0.99, 1, 1.01]:
-        def threshold_eval_pol(obs, prev_action):
-            return constant_threshold_policy(
-            obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-        def get_monte_carlo_eval_data(null_arg):
-            return get_data(threshold_eval_pol, dt, total_days, 1)
-        
-        trajs = []
-        with mp.Pool(mp.cpu_count()) as pool:
-            for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
-                trajs.extend(traj)
-        outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
-        with open('results/monte_carlo_thresh_eval_dt_{}_B_{}.pickle'.format(dt, B), 'wb') as f:
-            pickle.dump(outcomes, f)
 
     ##### Get obs data. #####
     num_obs_trajs = int(1e3)
-    # B = 0.1
-    # for dt in [0.3, 1, 3]:
-    #     def log_obs_pol(obs, prev_action):
-    #         return log_linear_policy(
-    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-    #     def get_obs_data(null_arg):
-    #         return get_data(log_obs_pol, dt, total_days, 1)
-    #     results = []
-    #     with mp.Pool(mp.cpu_count()) as pool:
-    #         for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
-    #             results.extend(traj)
-    #     with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
-    #         pickle.dump(results, f)
-
-    dt = 0.1
-    for B in [0.99, 1, 1.01]:
+    B = 0.2
+    for dt in [0.3, 1, 3]:
         def log_obs_pol(obs, prev_action):
             return log_linear_policy(
                 obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
@@ -312,3 +326,17 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                 results.extend(traj)
         with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
             pickle.dump(results, f)
+
+    # dt = 0.1
+    # for B in [0.99, 1, 1.01]:
+    #     def log_obs_pol(obs, prev_action):
+    #         return log_linear_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+    #     def get_obs_data(null_arg):
+    #         return get_data(log_obs_pol, dt, total_days, 1)
+    #     results = []
+    #     with mp.Pool(mp.cpu_count()) as pool:
+    #         for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+    #             results.extend(traj)
+    #     with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
+    #         pickle.dump(results, f)
