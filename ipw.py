@@ -214,6 +214,7 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
+    print(weighted_outcomes)
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
@@ -244,7 +245,6 @@ def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
     weighted_Q_sa = prod_weights * Q_hat_sa
     weighted_V_s = np.concatenate([[1], prod_weights[:-1]]) * V_hat_s
     control_variates = weighted_V_s - weighted_Q_sa
-    print(np.sum(Q_hat_sa))
 
     ipw_est = traj["outcome"]*np.prod(weights)
     aipw_est = ipw_est + np.sum(control_variates)
