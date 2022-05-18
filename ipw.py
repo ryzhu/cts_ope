@@ -257,8 +257,9 @@ def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat):
 def AIPW_eval(obs_data, eval_pol):
     """ Get AIPW ests. """
     # Split data
-    obs_data_1 = obs_data_trial[:num_obs//2]
-    obs_data_2 = obs_data_trial[num_obs//2:]
+    num_obs = len(obs_data)
+    obs_data_1 = obs_data[:num_obs//2]
+    obs_data_2 = obs_data[num_obs//2:]
     
     switch_model_1 = get_switch_model(obs_data_1)
     switch_model_2 = get_switch_model(obs_data_2)
