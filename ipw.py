@@ -214,12 +214,7 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     actions = np.hstack([traj["actions"] for traj in obs_data_train])
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
-    t0 = time.time()
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0, n_jobs=mp.cpu_count()).fit(SA, weighted_outcomes)
-    print("parallel rf ", time.time() - t0)
-    t0 = time.time()
-    Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
-    print("not parallel rf ", time.time() - t0)
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
