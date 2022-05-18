@@ -312,26 +312,26 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     B = 0.1
     policy_type = "thresh"
-    for dt in [0.1, 0.3, 1, 3, 10]:
-        def threshold_eval_pol(obs, prev_action):
-            return constant_threshold_policy(
-            obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-        def log_obs_pol_eval(obs, prev_action):
-            return log_linear_policy(
-                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-        def get_monte_carlo_eval_data(null_arg):
-            if policy_type == "thresh":
-                return get_data(threshold_eval_pol, dt, total_days, 1)
-            elif policy_type == "log":
-                return get_data(log_obs_pol_eval, dt, total_days, 1)
+    # for dt in [0.1, 0.3, 1, 3, 10]:
+    #     def threshold_eval_pol(obs, prev_action):
+    #         return constant_threshold_policy(
+    #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+    #     def log_obs_pol_eval(obs, prev_action):
+    #         return log_linear_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+    #     def get_monte_carlo_eval_data(null_arg):
+    #         if policy_type == "thresh":
+    #             return get_data(threshold_eval_pol, dt, total_days, 1)
+    #         elif policy_type == "log":
+    #             return get_data(log_obs_pol_eval, dt, total_days, 1)
         
-        trajs = []
-        with mp.Pool(mp.cpu_count()) as pool:
-            for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
-                trajs.extend(traj)
-        outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
-        with open('results/monte_carlo_{}_eval_T_{}_dt_{}_B_{}.pickle'.format(policy_type, total_days, dt, B), 'wb') as f:
-            pickle.dump(outcomes, f)
+    #     trajs = []
+    #     with mp.Pool(mp.cpu_count()) as pool:
+    #         for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
+    #             trajs.extend(traj)
+    #     outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
+    #     with open('results/monte_carlo_{}_eval_T_{}_dt_{}_B_{}.pickle'.format(policy_type, total_days, dt, B), 'wb') as f:
+    #         pickle.dump(outcomes, f)
     
     # dt = 0.1
     # for B in [0.99, 1, 1.01]:
@@ -381,11 +381,11 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_seeds = 1
-    num_obs_trajs_list = [int(3e2), int(1e3), int(3e3), int(1e4)] #], int(1e5)]
+    num_seeds = 50
+    num_obs_trajs_list = [int(3e2), int(1e3), int(3e3), int(1e4), int(3e4)] #], int(1e5)]
     B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs in tqdm(num_obs_trajs_list, desc = " num_trajs", position=0):
-        for dt in tqdm([0.3, 1, 3], desc=" dt", position=1):
+        for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
