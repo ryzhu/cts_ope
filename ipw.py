@@ -195,7 +195,6 @@ def pihat_obs_helper(obs, prev_action, switch_model):
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
 def get_Q_model(obs_data_train, pihat_obs, eval_pol):
-    outcomes = np.hstack([traj["outcome"] for traj in obs_data_train])
     weighted_outcomes = []
     SA = []
     for traj in obs_data_train:
@@ -216,45 +215,53 @@ def get_Q_model(obs_data_train, pihat_obs, eval_pol):
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
     return Q_hat
 
+def get_aipw_helper(traj, pihat_obs, Q_hat, eval_pol):
+    """ Return a single IPW and AIPW est using a single trajectory. """
+    # def parallel_helper(traj):
+    states = traj["states"]
+    actions = traj["actions"]
+    prev_actions = np.concatenate([[0], actions[:-1]])
+    t = np.arange(0, total_days, dt).reshape(-1, 1)
+    sa = np.hstack([states, t, actions.reshape(-1, 1)])
+    sa0 = np.hstack([states, t, np.zeros(t.shape)])
+    sa1 = np.hstack([states, t, np.ones(t.shape)])
+
+    # compute mean fn ests
+    Q_hat_sa = Q_hat.predict(sa)
+    Q_hat_sa0 = Q_hat.predict(sa0)
+    Q_hat_sa1 = Q_hat.predict(sa1)
+
+    pi_eval_1 = threshold_eval_pol(states, prev_actions)
+    pi_eval_0 = 1 - threshold_eval_pol(states, prev_actions)
+    V_hat_s = pi_eval_0 * Q_hat_sa0 + pi_eval_1 * Q_hat_sa1
+
+    # compute ip weights
+    weights = policy_prob_traj(
+        eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
+    prod_weights = np.cumprod(weights[::-1])[::-1]
+
+    weighted_Q_sa = prod_weights * Q_hat_sa
+    weighted_V_s = np.concatenate([[1], prod_weights[:-1]]) * V_hat_s
+    control_variates = weighted_V_s - weighted_Q_sa
+
+    ipw_est = traj["outcome"]*np.prod(weights)
+    aipw_est = ipw_est + np.sum(control_variates)
+    return ipw_est, aipw_est         
+
 def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat, eval_pol):
-    """ Return IPW and AIPW ests. """
-    def parallel_helper(traj):
-        states = traj["states"]
-        actions = traj["actions"]
-        prev_actions = np.concatenate([[0], actions[:-1]])
-        t = np.arange(0, total_days, dt).reshape(-1, 1)
-        sa = np.hstack([states, t, actions.reshape(-1, 1)])
-        sa0 = np.hstack([states, t, np.zeros(t.shape)])
-        sa1 = np.hstack([states, t, np.ones(t.shape)])
-
-        # compute mean fn ests
-        Q_hat_sa = Q_hat.predict(sa)
-        Q_hat_sa0 = Q_hat.predict(sa0)
-        Q_hat_sa1 = Q_hat.predict(sa1)
-
-        pi_eval_1 = threshold_eval_pol(states, prev_actions)
-        pi_eval_0 = 1 - threshold_eval_pol(states, prev_actions)
-        V_hat_s = pi_eval_0 * Q_hat_sa0 + pi_eval_1 * Q_hat_sa1
-
-        # compute ip weights
-        weights = policy_prob_traj(
-            eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
-        prod_weights = np.cumprod(weights[::-1])[::-1]
-
-        weighted_Q_sa = prod_weights * Q_hat_sa
-        weighted_V_s = np.concatenate([[1], prod_weights[:-1]]) * V_hat_s
-        control_variates = weighted_V_s - weighted_Q_sa
-
-        ipw_est = traj["outcome"]*np.prod(weights)
-        aipw_est = ipw_est + np.sum(control_variates)
-        return ipw_est, aipw_est             
     aipw_ests = []
     ipw_ests = []
     with mp.Pool(mp.cpu_count()) as pool:
-        for ests in tqdm(pool.imap_unordered(parallel_helper, [traj for traj in obs_data_eval])):
-            ipw_ests.append(ests[0])
-            aipw_ests.append(ests[1])
-    return ipw_ests, aipw_ests
+        res = pool.starmap_async(get_aipw_helper, [[traj, pihat_obs, Q_hat, eval_pol] for traj in obs_data_eval]) 
+        ests = res.get()
+    ipw_ests = [est[0] for est in ests]
+    aipw_ests = [est[0] for est in ests]
+
+        # for ests in tqdm(pool.imap_unordered(get_aipw_helper, 
+        # [[traj] for traj in obs_data_eval])):
+        #     ipw_ests.append(ests[0])
+        #     aipw_ests.append(ests[1])
+    return ipw_ests, aipw_ests    
 
 def AIPW_eval(obs_data, eval_pol):
     """ Get AIPW ests. """
@@ -277,6 +284,7 @@ def AIPW_eval(obs_data, eval_pol):
     Q_hat_2 = get_Q_model(obs_data_2, pihat_obs_2, eval_pol) # Qhat trained on split 2
     
     ### Cross evaluation ###
+    
     ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, pihat_obs_1, Q_hat_1, eval_pol) # train on split 1, eval on split 2
     ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, pihat_obs_2, Q_hat_2, eval_pol) # train on split 2, eval on split 1
     
