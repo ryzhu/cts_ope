@@ -382,7 +382,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     ##### Get IPW ests. #####
     num_seeds = 1
-    num_obs_trajs_list = [int(1e4)] # [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
+    num_obs_trajs_list = [int(1e3)] # [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
     B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs in tqdm(num_obs_trajs_list, desc = " num_trajs", position=0):
         for dt in tqdm([0.3, 1, 3], desc=" dt", position=1):
