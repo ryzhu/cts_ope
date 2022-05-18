@@ -161,8 +161,8 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                     policy_probs.append(prob_take_action_1)
             # ep_reward = np.median(rewards)
             ep_reward = np.mean(rewards)
-            data.append({"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward,
-                   "policy_probs": policy_probs})
+            data.append({"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward})
+                #    "policy_probs": policy_probs})
     return data
 
 ### Define observational policies, which have a logistic structure. ###
@@ -260,7 +260,7 @@ def IPW_eval(obs_data, pi_obs, pi_eval):
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
-    total_days = 1000
+    total_days = 30
 
     ##### Get monte carlo policy rollouts. #####
     num_monte_carlo_rollouts = int(1e3)
@@ -272,8 +272,8 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     param_string = "Vw: {}, Ew: {}, c: {}".format(V_weight, E_weight, c)
     print(param_string)
 
-    B = 0.3
-    policy_type = "log"
+    B = 0.2
+    policy_type = "thresh"
     for dt in [0.1, 0.3, 1, 3]:
         def threshold_eval_pol(obs, prev_action):
             return constant_threshold_policy(
@@ -292,7 +292,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             for traj in tqdm(pool.imap_unordered(get_monte_carlo_eval_data, [0 for _ in range(num_monte_carlo_rollouts)])):
                 trajs.extend(traj)
         outcomes[param_string] = np.array([traj["outcome"] for traj in trajs])
-        with open('results/monte_carlo_{}_eval_dt_{}_B_{}.pickle'.format(policy_type, dt, B), 'wb') as f:
+        with open('results/monte_carlo_{}_eval_T_{}_dt_{}_B_{}.pickle'.format(policy_type, total_days, dt, B), 'wb') as f:
             pickle.dump(outcomes, f)
     
     # dt = 0.1
@@ -312,20 +312,20 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     #         pickle.dump(outcomes, f)
 
     ##### Get obs data. #####
-    # num_obs_trajs = int(1e3)
-    # B = 0.2
-    # for dt in [0.3, 1, 3]:
-    #     def log_obs_pol(obs, prev_action):
-    #         return log_linear_policy(
-    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
-    #     def get_obs_data(null_arg):
-    #         return get_data(log_obs_pol, dt, total_days, 1)
-    #     results = []
-    #     with mp.Pool(mp.cpu_count()) as pool:
-    #         for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
-    #             results.extend(traj)
-    #     with open('results/obs_log_dt_{}_B_{}_n_{}.pickle'.format(dt, B, num_obs_trajs), 'wb') as f:
-    #         pickle.dump(results, f)
+    num_obs_trajs = int(1e3)
+    B = 0.2
+    for dt in [0.1, 0.3, 1, 3]:
+        def log_obs_pol(obs, prev_action):
+            return log_linear_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+        def get_obs_data(null_arg):
+            return get_data(log_obs_pol, dt, total_days, 1)
+        results = []
+        with mp.Pool(mp.cpu_count()) as pool:
+            for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+                results.extend(traj)
+        with open('results/obs_log_T_{}_dt_{}_B_{}_n_{}.pickle'.format(total_days, dt, B, num_obs_trajs), 'wb') as f:
+            pickle.dump(results, f)
 
     # dt = 0.1
     # for B in [0.99, 1, 1.01]:
