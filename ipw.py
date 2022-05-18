@@ -206,6 +206,7 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
         prod_weights = np.cumprod(weights[::-1])[::-1]
         weighted_outcomes.append(prod_weights * traj["outcome"])
         SA.append(np.hstack([states, t, actions.reshape(-1, 1)]))
+        print(traj["outcome"])
     weighted_outcomes = np.hstack(weighted_outcomes)
 #     states = np.vstack([np.hstack(
 #         [traj["states"], np.arange(0, total_days, dt).reshape(-1, 1)]) 
@@ -214,7 +215,6 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
-    print("product obs", np.prod(policy_prob_traj(pihat_obs, states, actions)))
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
