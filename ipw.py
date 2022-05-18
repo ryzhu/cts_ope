@@ -407,6 +407,8 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                     for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
                         desc=" collecting obs", position=3):
                         obs_data.extend(traj)
+                with open('results/obs_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+                    pickle.dump(obs_data, f)
             
 
                 # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
