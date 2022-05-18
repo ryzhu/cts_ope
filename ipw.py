@@ -194,7 +194,7 @@ def pihat_obs_helper(obs, prev_action, switch_model):
     stay_probs_11 = 1 - pred_switch_probs # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
-def get_Q_model(obs_data_train, switch_model, eval_pol):
+def get_Q_model(obs_data_train, switch_model, eval_pol, t):
     pihat_obs = lambda obs, prev_action: pihat_obs_helper(obs, prev_action, switch_model)
     weighted_outcomes = []
     SA = []
@@ -205,7 +205,7 @@ def get_Q_model(obs_data_train, switch_model, eval_pol):
             eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
         prod_weights = np.cumprod(weights[::-1])[::-1]
         weighted_outcomes.append(prod_weights * traj["outcome"])
-        SA.append(np.hstack([states, np.arange(0, total_days, dt).reshape(-1, 1), actions.reshape(-1, 1)]))
+        SA.append(np.hstack([states, t, actions.reshape(-1, 1)]))
     weighted_outcomes = np.hstack(weighted_outcomes)
 #     states = np.vstack([np.hstack(
 #         [traj["states"], np.arange(0, total_days, dt).reshape(-1, 1)]) 
@@ -216,14 +216,13 @@ def get_Q_model(obs_data_train, switch_model, eval_pol):
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
     return Q_hat
 
-def get_aipw_helper(traj, switch_model, Q_hat, eval_pol):
+def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
     """ Return a single IPW and AIPW est using a single trajectory. """
     pihat_obs = lambda obs, prev_action: pihat_obs_helper(obs, prev_action, switch_model)
     # def parallel_helper(traj):
     states = traj["states"]
     actions = traj["actions"]
     prev_actions = np.concatenate([[0], actions[:-1]])
-    t = np.arange(0, total_days, dt).reshape(-1, 1)
     sa = np.hstack([states, t, actions.reshape(-1, 1)])
     sa0 = np.hstack([states, t, np.zeros(t.shape)])
     sa1 = np.hstack([states, t, np.ones(t.shape)])
@@ -250,12 +249,15 @@ def get_aipw_helper(traj, switch_model, Q_hat, eval_pol):
     aipw_est = ipw_est + np.sum(control_variates)
     return ipw_est, aipw_est         
 
-def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol):
+def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol, t):
     aipw_ests = []
     ipw_ests = []
-    pool = mp.Pool(mp.cpu_count())
-    ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]).get()
-    pool.close()
+#     pool = mp.Pool(mp.cpu_count())
+#     ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]).get()
+#     pool.close()
+    ests = []
+    for traj in tqdm(obs_data_eval):
+        ests.append(get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t))
     ipw_ests = [est[0] for est in ests]
     aipw_ests = [est[1] for est in ests]
 
@@ -265,7 +267,7 @@ def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol):
         #     aipw_ests.append(ests[1])
     return ipw_ests, aipw_ests    
 
-def AIPW_eval(obs_data, eval_pol):
+def AIPW_eval(obs_data, eval_pol, total_days, dt):
     """ Get AIPW ests. """
     # Split data
     num_obs = len(obs_data)
@@ -281,14 +283,14 @@ def AIPW_eval(obs_data, eval_pol):
     # def pihat_obs_2(obs, prev_action):
     #     """Pihat trained on split 2. """
     #     return pihat_obs_helper(obs, prev_action, switch_model_2)
-    
-    Q_hat_1 = get_Q_model(obs_data_1, switch_model_1, eval_pol) # Qhat trained on split 1
-    Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol) # Qhat trained on split 2
+    t = np.arange(0, total_days, dt).reshape(-1, 1)
+    Q_hat_1 = get_Q_model(obs_data_1, switch_model_1, eval_pol, t) # Qhat trained on split 1
+    Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol, t) # Qhat trained on split 2
     
     ### Cross evaluation ###
     
-    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol) # train on split 1, eval on split 2
-    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol) # train on split 2, eval on split 1
+    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol, t) # train on split 1, eval on split 2
+    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol, t) # train on split 2, eval on split 1
     
     ipw_ests = ipw_ests_1 + ipw_ests_2
     aipw_ests = aipw_ests_1 + aipw_ests_2
@@ -402,12 +404,13 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             for _ in tqdm(range(num_seeds), desc=" seeds", position=2):
                 obs_data = []
                 with mp.Pool(mp.cpu_count()) as pool:
-                    for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+                    for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
+                        desc=" collecting obs", position=3):
                         obs_data.extend(traj)
             
 
                 # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
-                IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol)
+                IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol, total_days, dt)
                 all_IPW_ests.append(IPW_ests)
                 all_AIPW_ests.append(AIPW_ests)
                 # all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
