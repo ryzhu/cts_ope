@@ -251,7 +251,7 @@ def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat, eval_pol):
     aipw_ests = []
     ipw_ests = []
     with mp.Pool(mp.cpu_count()) as pool:
-        for ests in tqdm(pool.imap_unordered(get_obs_data, [traj for traj in obs_data_eval])):
+        for ests in tqdm(pool.imap_unordered(parallel_helper, [traj for traj in obs_data_eval])):
             ipw_ests.append(ests[0])
             aipw_ests.append(ests[1])
     return ipw_ests, aipw_ests
