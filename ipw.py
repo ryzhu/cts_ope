@@ -13,6 +13,8 @@ import pickle
 from tqdm import tqdm
 from scipy.stats import sem
 from scipy import stats
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestRegressor
 
 
 ### Environment Params ###
@@ -192,7 +194,7 @@ def pihat_obs_helper(obs, prev_action, switch_model):
     stay_probs_11 = 1 - pred_switch_probs # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
-def get_Q_model(obs_data_train, pihat):
+def get_Q_model(obs_data_train, pihat_obs, eval_pol):
     outcomes = np.hstack([traj["outcome"] for traj in obs_data_train])
     weighted_outcomes = []
     SA = []
@@ -200,7 +202,7 @@ def get_Q_model(obs_data_train, pihat):
         states = traj["states"]
         actions = traj["actions"]
         weights = policy_prob_traj(
-            eval_pol, states, actions) / policy_prob_traj(pihat, states, actions)
+            eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
         prod_weights = np.cumprod(weights[::-1])[::-1]
         weighted_outcomes.append(prod_weights * traj["outcome"])
         SA.append(np.hstack([states, np.arange(0, total_days, dt).reshape(-1, 1), actions.reshape(-1, 1)]))
@@ -214,7 +216,7 @@ def get_Q_model(obs_data_train, pihat):
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
     return Q_hat
 
-def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat):
+def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat, eval_pol):
     """ Return IPW and AIPW ests. """
     def parallel_helper(traj):
         states = traj["states"]
@@ -271,12 +273,12 @@ def AIPW_eval(obs_data, eval_pol):
         """Pihat trained on split 2. """
         return pihat_obs_helper(obs, prev_action, switch_model_2)
     
-    Q_hat_1 = get_Q_model(obs_data_1, pihat_obs_1) # Qhat trained on split 1
-    Q_hat_2 = get_Q_model(obs_data_2, pihat_obs_2) # Qhat trained on split 2
+    Q_hat_1 = get_Q_model(obs_data_1, pihat_obs_1, eval_pol) # Qhat trained on split 1
+    Q_hat_2 = get_Q_model(obs_data_2, pihat_obs_2, eval_pol) # Qhat trained on split 2
     
     ### Cross evaluation ###
-    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, pihat_obs_1, Q_hat_1) # train on split 1, eval on split 2
-    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, pihat_obs_2, Q_hat_2) # train on split 2, eval on split 1
+    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, pihat_obs_1, Q_hat_1, eval_pol) # train on split 1, eval on split 2
+    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, pihat_obs_2, Q_hat_2, eval_pol) # train on split 2, eval on split 1
     
     ipw_ests = ipw_ests_1 + ipw_ests_2
     aipw_ests = aipw_ests_1 + aipw_ests_2
