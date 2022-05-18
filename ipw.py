@@ -262,11 +262,12 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_seeds = 10
-    num_obs_trajs_list = [int(3e2), int(1e3), int(3e3)]
+    num_seeds = 100
+    num_obs_trajs_list = [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
     B_obs, B_eval = 0.2, 0.2
-    for num_obs_trajs in num_obs_trajs_list:
-        for dt in [0.3, 1, 3, 10]:
+    for num_obs_trajs in tqdm(num_obs_trajs_list):
+        print(num_obs_trajs)
+        for dt in [0.3, 1, 3]:
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -283,7 +284,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             for _ in range(num_seeds):
                 results = []
                 with mp.Pool(mp.cpu_count()) as pool:
-                    for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+                    for traj in pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]):
                         results.extend(traj)
             
 
