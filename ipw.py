@@ -289,9 +289,10 @@ def AIPW_eval(obs_data, eval_pol, total_days, dt):
     Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol, t) # Qhat trained on split 2
     
     ### Cross evaluation ###
-    
-    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol, t) # train on split 1, eval on split 2
-    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol, t) # train on split 2, eval on split 1
+    with warnings.catch_warnings(): # catch 'not DPP' warnings
+        warnings.simplefilter("ignore")
+        ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol, t) # train on split 1, eval on split 2
+        ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol, t) # train on split 2, eval on split 1
     
     ipw_ests = ipw_ests_1 + ipw_ests_2
     aipw_ests = aipw_ests_1 + aipw_ests_2
@@ -383,7 +384,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     ##### Get IPW ests. #####
     num_seeds_list = [10, 10]
-    num_obs_trajs_list = [int(1e3)]# int(1e4), int(3e4)] #], int(1e5)]
+    num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
     B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
         for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
