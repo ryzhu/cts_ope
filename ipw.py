@@ -35,91 +35,6 @@ env_params = {'p_k2': -0.03921113587893166,
  'p_lambdaE': -0.11146573677164344}
 
 ## Rollout a Trajectory ##
-def encode_action(action):
-    a = np.zeros(num_actions)
-    a[action] = 1
-    return a
-    
-def get_data_parallel(policy, dt=5, total_days=1000, num_patients=30):
-#     track = True
-
-    
-#     data = []
-
-#     for _ in tqdm(range(num_patients)): # parallelize this
-    def run_traj(seed):
-            import sys
-            sys.path.append('/Users/henryzhu/Research/data/RepBM')
-            from hiv_domain.hiv_simulator.hiv import HIVTreatment as model
-            import numpy as np
-            episode_length = total_days/dt
-            env = model(perturb_rate = perturb_rate, dt=dt)
-
-            np.random.seed(seed)
-
-            env.reset(perturb_params =  True, **env_params) # default to params from Liu
-            state = env.observe()   
-            # task is done after max_task_examples timesteps or when the agent enters a terminal state
-    #         ep_list = []
-            state_list = []
-            action_list = []
-            ep_reward = 0
-            prev_action = 0
-            rewards = []
-            policy_probs = []
-
-            while not env.is_done(episode_length=episode_length):
-            #     action = self.policy(state, eps)
-                state_list.append(state)
-                prob_take_action_1 = policy(state, prev_action)
-                
-                action = 3 * int(np.random.random() < prob_take_action_1)
-                action_list.append(action)
-                reward, next_state = env.perform_action(action, perturb_params=True, **env_params)
-    #             if not track: tmp.append(np.hstack([state,action,reward, next_state]))
-    #             else: 
-
-    #             ep_list.append(np.array([state, encode_action(action),reward,next_state, ins]))
-                state = next_state
-                prev_action = int(action != 0)
-            #     ep_reward += (reward*self.gamma**self.task.t)
-#                 ep_reward += reward
-                rewards.append(reward)
-                if action == 0:
-                    policy_probs.append(1 - prob_take_action_1)
-                else:
-                    policy_probs.append(prob_take_action_1)
-    #         if track:
-    #             pass
-                # print(np.unique(action_list, return_counts = True),ep_reward)
-#             ep_reward /= episode_length
-            ep_reward = np.median(rewards)
-            return {"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward,
-                   "policy_probs": policy_probs}
-#             data.append()
-#     with ipp.Cluster() as rc:
-        
-#         # get a view on the cluster
-#         view = rc.load_balanced_view()
-        
-#         rc[:].push(dict(
-#             log_linear_policy=log_linear_policy,
-#             beta_1=beta_1,
-#             c1=c1
-#         ))a
-        # submit the tasks
-    dview.push(dict(env_params=preset_hidden_params[ins],
-                   perturb_rate=perturb_rate,
-                   total_days=total_days,
-                   dt=dt,
-                   policy=policy))
-    asyncresult = dview.map_async(run_traj, list(range(num_patients)))
-    # wait interactively for results
-    asyncresult.wait_interactive()
-#     asyncresult.wait()
-    # retrieve actual results
-    data = asyncresult.get()
-    return data
 
 def get_data(policy, dt=5, total_days=1000, num_patients=30):
     np.random.seed()
@@ -137,6 +52,7 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
             prev_action = 0
             rewards = []
             policy_probs = []
+            num_switches = 0
 
             while not env.is_done(episode_length=episode_length):
             #     action = self.policy(state, eps)
@@ -145,6 +61,7 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                 
                 action = 3 * int(np.random.random() < prob_take_action_1)
                 action_list.append(action)
+                num_switches += int(int(action != 0) != prev_action)
                 reward, next_state = env.perform_action(action, perturb_params=True, **env_params)
     #             if not track: tmp.append(np.hstack([state,action,reward, next_state]))
     #             else: 
@@ -160,8 +77,10 @@ def get_data(policy, dt=5, total_days=1000, num_patients=30):
                 else:
                     policy_probs.append(prob_take_action_1)
             # ep_reward = np.median(rewards)
-            ep_reward = np.mean(rewards)
-            data.append({"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward})
+            # ep_reward = np.mean(rewards)
+            ep_reward = reward # outcome is final reward
+            data.append({"states": np.array(state_list), "actions": np.array(action_list), "outcome": ep_reward,
+                "num_switches": num_switches})
                 #    "policy_probs": policy_probs})
     return data
 
@@ -260,7 +179,7 @@ def IPW_eval(obs_data, pi_obs, pi_eval):
 
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
-    total_days = 30
+    total_days = 150
 
     ##### Get monte carlo policy rollouts. #####
     num_monte_carlo_rollouts = int(1e3)
