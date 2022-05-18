@@ -177,9 +177,113 @@ def IPW_eval(obs_data, pi_obs, pi_eval):
         ip_weights.append(ipw)
     return IPW_weighted_vals, ip_weights
 
+### AIPW helper functions ###
+def get_switch_model(obs_data_train):
+    states = np.vstack([traj["states"] for traj in obs_data_train])
+    actions = np.hstack([traj["actions"] for traj in obs_data_train])
+    prev_actions = np.concatenate([[0], actions[:-1]])
+    switch = (prev_actions != actions).astype(int)
+    switch_model = LogisticRegression(max_iter=10000).fit(states, switch)
+    return switch_model
+
+def pihat_obs_helper(obs, prev_action, switch_model):
+    pred_switch_probs = switch_model.predict_proba(obs)[:, 1]
+    switch_probs_01 = pred_switch_probs # P(1 | 0)
+    stay_probs_11 = 1 - pred_switch_probs # P(1 | 1)
+    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
+
+def get_Q_model(obs_data_train, pihat):
+    outcomes = np.hstack([traj["outcome"] for traj in obs_data_train])
+    weighted_outcomes = []
+    SA = []
+    for traj in obs_data_train:
+        states = traj["states"]
+        actions = traj["actions"]
+        weights = policy_prob_traj(
+            eval_pol, states, actions) / policy_prob_traj(pihat, states, actions)
+        prod_weights = np.cumprod(weights[::-1])[::-1]
+        weighted_outcomes.append(prod_weights * traj["outcome"])
+        SA.append(np.hstack([states, np.arange(0, total_days, dt).reshape(-1, 1), actions.reshape(-1, 1)]))
+    weighted_outcomes = np.hstack(weighted_outcomes)
+#     states = np.vstack([np.hstack(
+#         [traj["states"], np.arange(0, total_days, dt).reshape(-1, 1)]) 
+#                         for traj in obs_data_train])
+#     actions = np.hstack([traj["actions"] for traj in obs_data_train])
+#     SA = np.hstack([states, actions.reshape(-1, 1)])
+    SA = np.vstack(SA)
+    Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
+    return Q_hat
+
+def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat):
+    """ Return IPW and AIPW ests. """
+    def parallel_helper(traj):
+        states = traj["states"]
+        actions = traj["actions"]
+        prev_actions = np.concatenate([[0], actions[:-1]])
+        t = np.arange(0, total_days, dt).reshape(-1, 1)
+        sa = np.hstack([states, t, actions.reshape(-1, 1)])
+        sa0 = np.hstack([states, t, np.zeros(t.shape)])
+        sa1 = np.hstack([states, t, np.ones(t.shape)])
+
+        # compute mean fn ests
+        Q_hat_sa = Q_hat.predict(sa)
+        Q_hat_sa0 = Q_hat.predict(sa0)
+        Q_hat_sa1 = Q_hat.predict(sa1)
+
+        pi_eval_1 = threshold_eval_pol(states, prev_actions)
+        pi_eval_0 = 1 - threshold_eval_pol(states, prev_actions)
+        V_hat_s = pi_eval_0 * Q_hat_sa0 + pi_eval_1 * Q_hat_sa1
+
+        # compute ip weights
+        weights = policy_prob_traj(
+            eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
+        prod_weights = np.cumprod(weights[::-1])[::-1]
+
+        weighted_Q_sa = prod_weights * Q_hat_sa
+        weighted_V_s = np.concatenate([[1], prod_weights[:-1]]) * V_hat_s
+        control_variates = weighted_V_s - weighted_Q_sa
+
+        ipw_est = traj["outcome"]*np.prod(weights)
+        aipw_est = ipw_est + np.sum(control_variates)
+        return ipw_est, aipw_est             
+    aipw_ests = []
+    ipw_ests = []
+    with mp.Pool(mp.cpu_count()) as pool:
+        for ests in tqdm(pool.imap_unordered(get_obs_data, [traj for traj in obs_data_eval])):
+            ipw_ests.append(ests[0])
+            aipw_ests.append(ests[1])
+    return ipw_ests, aipw_ests
+
+def AIPW_eval(obs_data, eval_pol):
+    """ Get AIPW ests. """
+    # Split data
+    obs_data_1 = obs_data_trial[:num_obs//2]
+    obs_data_2 = obs_data_trial[num_obs//2:]
+    
+    switch_model_1 = get_switch_model(obs_data_1)
+    switch_model_2 = get_switch_model(obs_data_2)
+    
+    def pihat_obs_1(obs, prev_action):
+        """Pihat trained on split 1. """
+        return pihat_obs_helper(obs, prev_action, switch_model_1)
+    def pihat_obs_2(obs, prev_action):
+        """Pihat trained on split 2. """
+        return pihat_obs_helper(obs, prev_action, switch_model_2)
+    
+    Q_hat_1 = get_Q_model(obs_data_1, pihat_obs_1) # Qhat trained on split 1
+    Q_hat_2 = get_Q_model(obs_data_2, pihat_obs_2) # Qhat trained on split 2
+    
+    ### Cross evaluation ###
+    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, pihat_obs_1, Q_hat_1) # train on split 1, eval on split 2
+    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, pihat_obs_2, Q_hat_2) # train on split 2, eval on split 1
+    
+    ipw_ests = ipw_ests_1 + ipw_ests_2
+    aipw_ests = aipw_ests_1 + aipw_ests_2
+    return ipw_ests, aipw_ests
+
 if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     # and 'forkserver' start_methods
-    total_days = 150
+    total_days = 60
 
     ##### Get monte carlo policy rollouts. #####
     num_monte_carlo_rollouts = int(1e4)
@@ -262,13 +366,11 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_seeds = 100
-    num_obs_trajs_list = [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
-    B_obs, B_eval = 0.2, 0.2
+    num_seeds = 1
+    num_obs_trajs_list = [int(1e4)] # [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
+    B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs in tqdm(num_obs_trajs_list):
-        print("n: ", num_obs_trajs)
         for dt in tqdm([0.3, 1, 3]):
-            print("dt: ", dt)
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -281,18 +383,22 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                 return constant_threshold_policy(
                 obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
             
+            # all_ests = []
             all_IPW_ests = []
-            for _ in range(num_seeds):
-                results = []
+            all_AIPW_ests = []
+            for _ in tqdm(range(num_seeds)):
+                obs_data = []
                 with mp.Pool(mp.cpu_count()) as pool:
-                    for traj in pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]):
-                        results.extend(traj)
+                    for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
+                        obs_data.extend(traj)
             
 
-                IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
+                # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
+                IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol)
                 all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
-            IPW_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
-                V_weight, E_weight, c, B_eval): all_IPW_ests}
+                all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
+            eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
+                V_weight, E_weight, c, B_eval): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
 
-            with open('results/ipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
-                pickle.dump(IPW_data, f)
+            with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+                pickle.dump(eval_data, f)
