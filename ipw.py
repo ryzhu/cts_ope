@@ -257,7 +257,7 @@ def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol):
     ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]).get()
     pool.close()
     ipw_ests = [est[0] for est in ests]
-    aipw_ests = [est[0] for est in ests]
+    aipw_ests = [est[1] for est in ests]
 
         # for ests in tqdm(pool.imap_unordered(get_aipw_helper, 
         # [[traj] for traj in obs_data_eval])):
@@ -382,8 +382,8 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     num_seeds = 1
     num_obs_trajs_list = [int(1e4)] # [int(3e2), int(1e3), int(3e3)] #, int(1e4), int(1e5)]
     B_obs, B_eval = 0.1, 0.1
-    for num_obs_trajs in tqdm(num_obs_trajs_list):
-        for dt in tqdm([0.3, 1, 3]):
+    for num_obs_trajs in tqdm(num_obs_trajs_list, desc = " num_trajs", position=0):
+        for dt in tqdm([0.3, 1, 3], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -399,7 +399,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             # all_ests = []
             all_IPW_ests = []
             all_AIPW_ests = []
-            for _ in tqdm(range(num_seeds)):
+            for _ in tqdm(range(num_seeds), desc=" seeds", position=2):
                 obs_data = []
                 with mp.Pool(mp.cpu_count()) as pool:
                     for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)])):
@@ -408,8 +408,10 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
                 # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
                 IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol)
-                all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
-                all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
+                all_IPW_ests.append(IPW_ests)
+                all_AIPW_ests.append(AIPW_ests)
+                # all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
+                # all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
             eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
                 V_weight, E_weight, c, B_eval): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
 
