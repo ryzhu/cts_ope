@@ -252,12 +252,12 @@ def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
 def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol, t):
     aipw_ests = []
     ipw_ests = []
-#     pool = mp.Pool(mp.cpu_count())
-#     ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]).get()
-#     pool.close()
-    ests = []
-    for traj in tqdm(obs_data_eval):
-        ests.append(get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t))
+    pool = mp.Pool(mp.cpu_count())
+    ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol, t] for traj in obs_data_eval]).get()
+    pool.close()
+    # ests = []
+    # for traj in tqdm(obs_data_eval):
+    #     ests.append(get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t))
     ipw_ests = [est[0] for est in ests]
     aipw_ests = [est[1] for est in ests]
 
@@ -396,7 +396,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
             def threshold_eval_pol(obs, prev_action):
                 return constant_threshold_policy(
-                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
             
             # all_ests = []
             all_IPW_ests = []
