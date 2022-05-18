@@ -6,6 +6,7 @@ import numpy as np
 from hiv import HIVTreatment as model
 import multiprocessing as mp
 print("Number of processors: ", mp.cpu_count())
+import warnings
 
 
 import pickle
@@ -289,7 +290,7 @@ def AIPW_eval(obs_data, eval_pol, total_days, dt):
     Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol, t) # Qhat trained on split 2
     
     ### Cross evaluation ###
-    with warnings.catch_warnings(): # catch 'not DPP' warnings
+    with warnings.catch_warnings(): 
         warnings.simplefilter("ignore")
         ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol, t) # train on split 1, eval on split 2
         ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol, t) # train on split 2, eval on split 1
