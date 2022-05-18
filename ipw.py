@@ -214,8 +214,7 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
-    print("product eval", np.prod(policy_prob_traj(
-            eval_pol, states, actions)))
+    print("product obs", np.prod(policy_prob_traj(pihat_obs, states, actions)))
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
