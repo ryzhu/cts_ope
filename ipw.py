@@ -253,9 +253,9 @@ def get_aipw_helper(traj, switch_model, Q_hat, eval_pol):
 def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol):
     aipw_ests = []
     ipw_ests = []
-    with mp.Pool(mp.cpu_count()) as pool:
-        res = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]) 
-        ests = res.get()
+    pool = mp.Pool(mp.cpu_count())
+    ests = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]).get()
+    pool.close()
     ipw_ests = [est[0] for est in ests]
     aipw_ests = [est[0] for est in ests]
 
