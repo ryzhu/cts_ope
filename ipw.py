@@ -381,10 +381,10 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_seeds = 50
+    num_seeds_list = [100, 100, 80, 50, 30]
     num_obs_trajs_list = [int(3e2), int(1e3), int(3e3), int(1e4), int(3e4)] #], int(1e5)]
     B_obs, B_eval = 0.1, 0.1
-    for num_obs_trajs in tqdm(num_obs_trajs_list, desc = " num_trajs", position=0):
+    for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
         for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
