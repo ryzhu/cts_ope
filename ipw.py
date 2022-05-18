@@ -182,7 +182,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     total_days = 150
 
     ##### Get monte carlo policy rollouts. #####
-    num_monte_carlo_rollouts = int(1e3)
+    num_monte_carlo_rollouts = int(1e4)
     outcomes = {}
     # for V_weight in [-1, -2, -3]:
     #     for E_weight in [1, 2, 3]:
@@ -193,7 +193,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     B = 0.2
     policy_type = "thresh"
-    for dt in [0.1, 0.3, 1, 3]:
+    for dt in [0.1, 0.3, 1, 3, 10]:
         def threshold_eval_pol(obs, prev_action):
             return constant_threshold_policy(
             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B, dt, raw_state=False)
@@ -266,7 +266,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     num_obs_trajs_list = [int(1e3), int(3e3), int(1e4)]
     B_obs, B_eval = 0.2, 0.2
     for num_obs_trajs in num_obs_trajs_list:
-        for dt in [0.1, 0.3, 1, 3]:
+        for dt in [0.3, 1, 3, 10]:
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
