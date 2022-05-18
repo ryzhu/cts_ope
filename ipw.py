@@ -15,6 +15,7 @@ from scipy.stats import sem
 from scipy import stats
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
+import time
 
 
 ### Environment Params ###
@@ -185,7 +186,7 @@ def get_switch_model(obs_data_train):
     actions = np.hstack([traj["actions"] for traj in obs_data_train])
     prev_actions = np.concatenate([[0], actions[:-1]])
     switch = (prev_actions != actions).astype(int)
-    switch_model = LogisticRegression(max_iter=10000).fit(states, switch)
+    switch_model = LogisticRegression(max_iter=10000, n_jobs=mp.cpu_count()).fit(states, switch)
     return switch_model
 
 def pihat_obs_helper(obs, prev_action, switch_model):
@@ -213,7 +214,9 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     actions = np.hstack([traj["actions"] for traj in obs_data_train])
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
-    Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
+    print("start training rf")
+    Q_hat = RandomForestRegressor(max_depth=2, random_state=0, n_jobs=mp.cpu_count()).fit(SA, weighted_outcomes)
+    print("finish training rf")
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
