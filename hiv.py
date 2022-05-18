@@ -125,7 +125,7 @@ class HIVTreatment(object):
             T1, T2, T1s, T2s, V, E = state
         # the reward function penalizes treatment because of side-effects
         # reward = -0.1*V - 2e4*eps1**2 - 2e3*eps2**2 + 1e3*E
-        reward = int(np.log10(V) < 4 and np.log10(E) > 2.5)
+        reward = int(np.log10(V) < 4 and np.log10(E) > 1.5)
         # Constrain reward to be within specified range
         if np.isnan(reward):
             reward = -self.reward_bound
