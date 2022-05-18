@@ -214,9 +214,12 @@ def get_Q_model(obs_data_train, switch_model, eval_pol, t):
 #     actions = np.hstack([traj["actions"] for traj in obs_data_train])
 #     SA = np.hstack([states, actions.reshape(-1, 1)])
     SA = np.vstack(SA)
-    print("start training rf")
+    t0 = time.time()
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0, n_jobs=mp.cpu_count()).fit(SA, weighted_outcomes)
-    print("finish training rf")
+    print("parallel rf ", time.time() - t0)
+    t0 = time.time()
+    Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
+    print("not parallel rf ", time.time() - t0)
     return Q_hat
 
 def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
@@ -385,7 +388,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     ##### Get IPW ests. #####
     num_seeds_list = [10, 10]
-    num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
+    num_obs_trajs_list = [int(1e3)]# int(1e4), int(3e4)] #], int(1e5)]
     B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
         for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
