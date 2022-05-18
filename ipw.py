@@ -194,7 +194,8 @@ def pihat_obs_helper(obs, prev_action, switch_model):
     stay_probs_11 = 1 - pred_switch_probs # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
-def get_Q_model(obs_data_train, pihat_obs, eval_pol):
+def get_Q_model(obs_data_train, switch_model, eval_pol):
+    pihat_obs = lambda obs, prev_action: pihat_obs_helper(obs, prev_action, switch_model)
     weighted_outcomes = []
     SA = []
     for traj in obs_data_train:
@@ -215,8 +216,9 @@ def get_Q_model(obs_data_train, pihat_obs, eval_pol):
     Q_hat = RandomForestRegressor(max_depth=2, random_state=0).fit(SA, weighted_outcomes)
     return Q_hat
 
-def get_aipw_helper(traj, pihat_obs, Q_hat, eval_pol):
+def get_aipw_helper(traj, switch_model, Q_hat, eval_pol):
     """ Return a single IPW and AIPW est using a single trajectory. """
+    pihat_obs = lambda obs, prev_action: pihat_obs_helper(obs, prev_action, switch_model)
     # def parallel_helper(traj):
     states = traj["states"]
     actions = traj["actions"]
@@ -248,11 +250,11 @@ def get_aipw_helper(traj, pihat_obs, Q_hat, eval_pol):
     aipw_est = ipw_est + np.sum(control_variates)
     return ipw_est, aipw_est         
 
-def get_aipw_evals(obs_data_eval, pihat_obs, Q_hat, eval_pol):
+def get_aipw_evals(obs_data_eval, switch_model, Q_hat, eval_pol):
     aipw_ests = []
     ipw_ests = []
     with mp.Pool(mp.cpu_count()) as pool:
-        res = pool.starmap_async(get_aipw_helper, [[traj, pihat_obs, Q_hat, eval_pol] for traj in obs_data_eval]) 
+        res = pool.starmap_async(get_aipw_helper, [[traj, switch_model, Q_hat, eval_pol] for traj in obs_data_eval]) 
         ests = res.get()
     ipw_ests = [est[0] for est in ests]
     aipw_ests = [est[0] for est in ests]
@@ -273,20 +275,20 @@ def AIPW_eval(obs_data, eval_pol):
     switch_model_1 = get_switch_model(obs_data_1)
     switch_model_2 = get_switch_model(obs_data_2)
     
-    def pihat_obs_1(obs, prev_action):
-        """Pihat trained on split 1. """
-        return pihat_obs_helper(obs, prev_action, switch_model_1)
-    def pihat_obs_2(obs, prev_action):
-        """Pihat trained on split 2. """
-        return pihat_obs_helper(obs, prev_action, switch_model_2)
+    # def pihat_obs_1(obs, prev_action):
+    #     """Pihat trained on split 1. """
+    #     return pihat_obs_helper(obs, prev_action, switch_model_1)
+    # def pihat_obs_2(obs, prev_action):
+    #     """Pihat trained on split 2. """
+    #     return pihat_obs_helper(obs, prev_action, switch_model_2)
     
-    Q_hat_1 = get_Q_model(obs_data_1, pihat_obs_1, eval_pol) # Qhat trained on split 1
-    Q_hat_2 = get_Q_model(obs_data_2, pihat_obs_2, eval_pol) # Qhat trained on split 2
+    Q_hat_1 = get_Q_model(obs_data_1, switch_model_1, eval_pol) # Qhat trained on split 1
+    Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol) # Qhat trained on split 2
     
     ### Cross evaluation ###
     
-    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, pihat_obs_1, Q_hat_1, eval_pol) # train on split 1, eval on split 2
-    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, pihat_obs_2, Q_hat_2, eval_pol) # train on split 2, eval on split 1
+    ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol) # train on split 1, eval on split 2
+    ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol) # train on split 2, eval on split 1
     
     ipw_ests = ipw_ests_1 + ipw_ests_2
     aipw_ests = aipw_ests_1 + aipw_ests_2
