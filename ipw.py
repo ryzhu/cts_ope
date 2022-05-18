@@ -240,6 +240,7 @@ def get_aipw_helper(traj, switch_model, Q_hat, eval_pol, t):
     weights = policy_prob_traj(
         eval_pol, states, actions) / policy_prob_traj(pihat_obs, states, actions)
     prod_weights = np.cumprod(weights[::-1])[::-1]
+    print(weights)
 
     weighted_Q_sa = prod_weights * Q_hat_sa
     weighted_V_s = np.concatenate([[1], prod_weights[:-1]]) * V_hat_s
