@@ -109,6 +109,11 @@ def log_linear_policy(obs, prev_action, beta, c, B, dt, raw_state=False):
     stay_probs_11 = 1 - np.minimum(B * dt / (1 + np.exp(- (obs @ beta - c))), 1) # P(1 | 1)
     return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
 
+def constant_obs_pol(obs, prev_action):
+    switch_probs_01 = B_obs * dt # P(1 | 0)
+    stay_probs_11 = 1 - B_obs * dt # P(1 | 1)
+    return np.where(prev_action == 0, switch_probs_01, stay_probs_11)
+
 def policy_prob_traj(policy, obs, actions):
     """ Returns the probability of taking the trajectory under the policy. 
         Obs - horizon x state dim 2D array, Actions - 1D array of length horizon """
@@ -386,6 +391,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     ##### Get IPW ests. #####
     num_seeds_list = [10, 10]
     num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
+    policy_type = "const"
     B_obs, B_eval = 0.1, 0.1
     for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
         for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
@@ -393,7 +399,10 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
             def get_obs_data(null_arg):
-                return get_data(log_obs_pol, dt, total_days, 1)
+                if policy_type == "const":
+                    return get_data(constant_obs_pol, dt, total_days, 1)
+                else:
+                    return get_data(log_obs_pol, dt, total_days, 1)
             # def log_eval_pol(obs, prev_action):
             #     return log_linear_policy(
             #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
@@ -410,7 +419,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                     for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
                         desc=" collecting obs", position=3):
                         obs_data.extend(traj)
-                with open('results/obs_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+                with open('results/obs_policy_{}_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(policy_type, total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
                     pickle.dump(obs_data, f)
             
 
@@ -423,5 +432,49 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
                 V_weight, E_weight, c, B_eval): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
 
-            with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+            with open('results/aipw_{}_policy_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
+                policy_type, total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
                 pickle.dump(eval_data, f)
+
+    # ### Sweep over B's ###
+    # num_seeds_list = [10, 10]
+    # num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
+    # B_obs, B_eval = 0.1, 0.1
+    # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
+    #     for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
+    #         def log_obs_pol(obs, prev_action):
+    #             return log_linear_policy(
+    #                 obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
+    #         def get_obs_data(null_arg):
+    #             return get_data(log_obs_pol, dt, total_days, 1)
+    #         # def log_eval_pol(obs, prev_action):
+    #         #     return log_linear_policy(
+    #         #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+    #         def threshold_eval_pol(obs, prev_action):
+    #             return constant_threshold_policy(
+    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+            
+    #         # all_ests = []
+    #         all_IPW_ests = []
+    #         all_AIPW_ests = []
+    #         for _ in tqdm(range(num_seeds), desc=" seeds", position=2):
+    #             obs_data = []
+    #             with mp.Pool(mp.cpu_count()) as pool:
+    #                 for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
+    #                     desc=" collecting obs", position=3):
+    #                     obs_data.extend(traj)
+    #             with open('results/obs_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+    #                 pickle.dump(obs_data, f)
+            
+
+    #             # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
+    #             IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol, total_days, dt)
+    #             # all_IPW_ests.append(IPW_ests)
+    #             # all_AIPW_ests.append(AIPW_ests)
+    #             all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
+    #             all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
+    #         eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
+    #             V_weight, E_weight, c, B_eval): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
+
+    #         with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+    #             pickle.dump(eval_data, f)
