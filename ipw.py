@@ -398,15 +398,15 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    # num_seeds_list = [50]
+    num_seeds_list = [30, 50, ]
     # num_obs_trajs_list = [int(1e4)] #], int(1e5)]
     num_obs_trajs = int(1e4)
-    num_seeds = 50
-    policy_type = "const"
+    num_seeds = 30
+    # policy_type = "const"
     B_obs, B_eval = 0.1, 0.1
     # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
     for policy_type in ["const", "log"]:
-        for dt in tqdm([0.03, 0.1, 0.3, 1, 3, 5], desc=" dt", position=1):
+        for dt in tqdm([0.1, 0.3, 1, 3, 7], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -499,6 +499,6 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
             eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
                 V_weight, E_weight, c, np.round(B_eval, 2)): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
 
-            with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
-                total_days, dt, np.round(B_obs, 2), num_obs_trajs), 'wb') as f:
+            with open('results/aipw_{}_policy_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
+                policy_type, total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
                 pickle.dump(eval_data, f)
