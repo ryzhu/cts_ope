@@ -281,8 +281,11 @@ def AIPW_eval(obs_data, eval_pol, total_days, dt):
     obs_data_1 = obs_data[:num_obs//2]
     obs_data_2 = obs_data[num_obs//2:]
     
+    print("training switch models")
+    t0 = time.time()
     switch_model_1 = get_switch_model(obs_data_1)
     switch_model_2 = get_switch_model(obs_data_2)
+    print("done training switch models", time.time() - t0)
     
     # def pihat_obs_1(obs, prev_action):
     #     """Pihat trained on split 1. """
@@ -291,15 +294,21 @@ def AIPW_eval(obs_data, eval_pol, total_days, dt):
     #     """Pihat trained on split 2. """
     #     return pihat_obs_helper(obs, prev_action, switch_model_2)
     t = np.arange(0, total_days, dt).reshape(-1, 1)
+    print("training Q-fns")
+    t0 = time.time()
     Q_hat_1 = get_Q_model(obs_data_1, switch_model_1, eval_pol, t) # Qhat trained on split 1
     Q_hat_2 = get_Q_model(obs_data_2, switch_model_2, eval_pol, t) # Qhat trained on split 2
+    print("done training Q-fns", time.time() - t0)
     
     ### Cross evaluation ###
     with warnings.catch_warnings(): 
         warnings.simplefilter("ignore")
+        print("getting aipw evals")
+        t0 = time.time()
         ipw_ests_1, aipw_ests_1 = get_aipw_evals(obs_data_2, switch_model_1, Q_hat_1, eval_pol, t) # train on split 1, eval on split 2
         ipw_ests_2, aipw_ests_2 = get_aipw_evals(obs_data_1, switch_model_2, Q_hat_2, eval_pol, t) # train on split 2, eval on split 1
-    
+        print("done getting aipw evals", time.time() - t0)
+
     ipw_ests = ipw_ests_1 + ipw_ests_2
     aipw_ests = aipw_ests_1 + aipw_ests_2
     return ipw_ests, aipw_ests
@@ -441,44 +450,50 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                 pickle.dump(eval_data, f)
 
     # ### Sweep over B's ###
-    # num_seeds_list = [10, 10]
-    # num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
+    # num_seeds_list = [50, 50]
+    num_seeds = 50
+    num_obs_trajs = int(1e4)
+    # num_obs_trajs_list = [int(1e4)] #, int(3e4)] #], int(1e5)]
     # B_obs, B_eval = 0.1, 0.1
     # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
-    #     for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
-    #         def log_obs_pol(obs, prev_action):
-    #             return log_linear_policy(
-    #                 obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
-    #         def get_obs_data(null_arg):
-    #             return get_data(log_obs_pol, dt, total_days, 1)
-    #         # def log_eval_pol(obs, prev_action):
-    #         #     return log_linear_policy(
-    #         #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
-    #         def threshold_eval_pol(obs, prev_action):
-    #             return constant_threshold_policy(
-    #             obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+    for B in [1/6, 1/8, 1/10, 1/12, 1/14]:
+        B_obs, B_eval = B, B
+        for dt in tqdm([0.03, 0.1, 0.3, 1, 3], desc=" dt", position=1):
+            def log_obs_pol(obs, prev_action):
+                return log_linear_policy(
+                    obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
+            def get_obs_data(null_arg):
+                return get_data(log_obs_pol, dt, total_days, 1)
+            # def log_eval_pol(obs, prev_action):
+            #     return log_linear_policy(
+            #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
+            def threshold_eval_pol(obs, prev_action):
+                return constant_threshold_policy(
+                obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
             
-    #         # all_ests = []
-    #         all_IPW_ests = []
-    #         all_AIPW_ests = []
-    #         for _ in tqdm(range(num_seeds), desc=" seeds", position=2):
-    #             obs_data = []
-    #             with mp.Pool(mp.cpu_count()) as pool:
-    #                 for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
-    #                     desc=" collecting obs", position=3):
-    #                     obs_data.extend(traj)
-    #             with open('results/obs_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
-    #                 pickle.dump(obs_data, f)
+            # all_ests = []
+            all_IPW_ests = []
+            all_AIPW_ests = []
+            for _ in tqdm(range(num_seeds), desc=" seeds", position=2):
+                obs_data = []
+                with mp.Pool(mp.cpu_count()) as pool:
+                    for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
+                        desc=" collecting obs", position=3):
+                        obs_data.extend(traj)
+                # with open('results/obs_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
+                #     total_days, dt, np.round(B_obs, 2), num_obs_trajs), 'wb') as f:
+                #     pickle.dump(obs_data, f)
             
 
-    #             # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
-    #             IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol, total_days, dt)
-    #             # all_IPW_ests.append(IPW_ests)
-    #             # all_AIPW_ests.append(AIPW_ests)
-    #             all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
-    #             all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
-    #         eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
-    #             V_weight, E_weight, c, B_eval): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
+                # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
+                IPW_ests, AIPW_ests = AIPW_eval(obs_data, threshold_eval_pol, total_days, dt)
+                # all_IPW_ests.append(IPW_ests)
+                # all_AIPW_ests.append(AIPW_ests)
+                all_IPW_ests.append([np.mean(IPW_ests), stats.sem(IPW_ests)])
+                all_AIPW_ests.append([np.mean(AIPW_ests), stats.sem(AIPW_ests)])
+            eval_data = {"Vw_eval: {}, Ew_eval: {}, c_eval: {}, B_eval: {}".format(
+                V_weight, E_weight, c, np.round(B_eval, 2)): {"IPW": all_IPW_ests, "AIPW": all_AIPW_ests}}
 
-    #         with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
-    #             pickle.dump(eval_data, f)
+            with open('results/aipw_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
+                total_days, dt, np.round(B_obs, 2), num_obs_trajs), 'wb') as f:
+                pickle.dump(eval_data, f)
