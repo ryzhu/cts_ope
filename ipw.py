@@ -192,7 +192,7 @@ def get_switch_model(obs_data_train):
     actions = np.hstack([traj["actions"] for traj in obs_data_train])
     prev_actions = np.concatenate([[0], actions[:-1]])
     switch = (prev_actions != actions).astype(int)
-    switch_model = LogisticRegression(solver='saga', max_iter=1000, n_jobs=mp.cpu_count()).fit(states, switch)
+    switch_model = LogisticRegression(solver='saga', n_jobs=mp.cpu_count()).fit(states, switch)
     return switch_model
 
 def pihat_obs_helper(obs, prev_action, switch_model):
