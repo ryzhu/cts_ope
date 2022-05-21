@@ -389,12 +389,15 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
 
     ##### Get IPW ests. #####
-    num_seeds_list = [10, 10]
-    num_obs_trajs_list = [int(1e4), int(3e4)] #], int(1e5)]
+    # num_seeds_list = [50]
+    # num_obs_trajs_list = [int(1e4)] #], int(1e5)]
+    num_obs_trajs = int(1e4)
+    num_seeds = 50
     policy_type = "const"
     B_obs, B_eval = 0.1, 0.1
-    for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
-        for dt in tqdm([0.1, 0.3, 1, 3, 10], desc=" dt", position=1):
+    # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
+    for policy_type in ["const", "log"]:
+        for dt in tqdm([0.03, 0.1, 0.3, 1, 3], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -419,8 +422,9 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
                     for traj in tqdm(pool.imap_unordered(get_obs_data, [0 for _ in range(num_obs_trajs)]),
                         desc=" collecting obs", position=3):
                         obs_data.extend(traj)
-                with open('results/obs_policy_{}_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(policy_type, total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
-                    pickle.dump(obs_data, f)
+                # with open('results/obs_policy_{}_T_{}_dt_{}_Bobs_{}_n_{}.pickle'.format(
+                #     policy_type, total_days, dt, B_obs, num_obs_trajs), 'wb') as f:
+                #     pickle.dump(obs_data, f)
             
 
                 # IPW_ests, IPW_weights = IPW_eval(results, log_obs_pol, threshold_eval_pol)
