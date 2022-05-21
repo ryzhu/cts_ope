@@ -192,7 +192,7 @@ def get_switch_model(obs_data_train):
     actions = np.hstack([traj["actions"] for traj in obs_data_train])
     prev_actions = np.concatenate([[0], actions[:-1]])
     switch = (prev_actions != actions).astype(int)
-    switch_model = LogisticRegression(max_iter=10000, n_jobs=mp.cpu_count()).fit(states, switch)
+    switch_model = LogisticRegression(solver='saga', max_iter=1000, n_jobs=mp.cpu_count()).fit(states, switch)
     return switch_model
 
 def pihat_obs_helper(obs, prev_action, switch_model):
@@ -406,7 +406,7 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
     B_obs, B_eval = 0.1, 0.1
     # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
     for policy_type in ["const", "log"]:
-        for dt in tqdm([0.03, 0.1, 0.3, 1, 3], desc=" dt", position=1):
+        for dt in tqdm([0.03, 0.1, 0.3, 1, 3, 5], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
@@ -451,19 +451,24 @@ if __name__ == '__main__':  # <- prevent RuntimeError for 'spawn'
 
     # ### Sweep over B's ###
     # num_seeds_list = [50, 50]
-    num_seeds = 50
+    num_seeds = 30
     num_obs_trajs = int(1e4)
     # num_obs_trajs_list = [int(1e4)] #, int(3e4)] #], int(1e5)]
     # B_obs, B_eval = 0.1, 0.1
     # for num_obs_trajs, num_seeds in tqdm(zip(num_obs_trajs_list, num_seeds_list), desc = " num_trajs", position=0):
-    for B in [1/6, 1/8, 1/10, 1/12, 1/14]:
-        B_obs, B_eval = B, B
-        for dt in tqdm([0.03, 0.1, 0.3, 1, 3], desc=" dt", position=1):
+    dt = 0.1
+    for B in tqdm([1/6, 1/8, 1/10, 1/12, 1/14], desc=" B", position=1):
+        for policy_type in ["const", "log"]:
+            B_obs, B_eval = B, B
+            # for dt in tqdm([0.03, 0.1, 0.3, 1, 3], desc=" dt", position=1):
             def log_obs_pol(obs, prev_action):
                 return log_linear_policy(
                     obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_obs, dt, raw_state=False)
             def get_obs_data(null_arg):
-                return get_data(log_obs_pol, dt, total_days, 1)
+                if policy_type == "const":
+                    return get_data(constant_obs_pol, dt, total_days, 1)
+                else:
+                    return get_data(log_obs_pol, dt, total_days, 1)
             # def log_eval_pol(obs, prev_action):
             #     return log_linear_policy(
             #         obs, prev_action, np.array([0, 0, 0, 0, V_weight, E_weight]), c, B_eval, dt, raw_state=False)
